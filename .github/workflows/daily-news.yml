@@ -1,0 +1,32 @@
+name: 신도시 뉴스 메일
+
+on:
+  schedule:
+    - cron: "0 22 * * *"   # 매일 한국시간 오전 7시 (UTC 22시)
+  workflow_dispatch:         # Actions 화면에서 수동 실행 버튼
+
+permissions:
+  contents: write
+
+jobs:
+  news:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 기사 수집 및 메일 발송
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          WEB_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: python news.py
+      - name: 기록 저장
+        run: |
+          git config user.name "news-bot"
+          git config user.email "news-bot@users.noreply.github.com"
+          git add seen.json docs/archive.json
+          git diff --cached --quiet || git commit -m "뉴스 기록 $(date +%F)"
+          git push
