@@ -23,7 +23,15 @@ TOPICS = {
     "3기 신도시": ['"3기 신도시"', '"3기신도시"'],
     "광명시흥": ['광명시흥 신도시', '"광명시흥지구"', '"광명시흥"'],
     "의왕군포안산": ['"의왕군포안산"', '의왕 군포 안산 신도시'],
+    "용량시장": ['"용량시장"', '용량시장 전력'],
+    "히트펌프": ['히트펌프 전력', '히트펌프 열공급', '"히트펌프" 에너지'],
+    "전극보일러": ['"전극보일러"'],
 }
+# 제목에 이 단어가 들어간 기사는 뺍니다 (가전제품 광고성 기사 등)
+EXCLUDE = {
+    "히트펌프": ["건조기", "세탁기", "에어컨", "특가", "할인"],
+}
+SIMILAR = 0.5                # 제목이 이 정도 이상 겹치면 같은 기사로 봅니다(0~1)
 LOOKBACK_HOURS = 30          # 최근 몇 시간 기사까지 볼지
 MAX_PER_TOPIC = 30           # 주제별 최대 기사 수
 ARCHIVE_DAYS = 60            # 웹페이지에 남겨둘 기간(일)
@@ -67,6 +75,15 @@ def norm(title):
     return "".join(ch for ch in title.lower() if ch.isalnum())
 
 
+def grams(title):
+    t = norm(title)
+    return {t[i:i + 2] for i in range(len(t) - 1)} or {t}
+
+
+def similar(a, b):
+    return len(a & b) / len(a | b) >= SIMILAR if a and b else False
+
+
 def load_json(path, default):
     try:
         with open(path, encoding="utf-8") as f:
@@ -78,7 +95,9 @@ def load_json(path, default):
 def collect(seen):
     now = datetime.now(KST)
     cutoff = now - timedelta(hours=LOOKBACK_HOURS)
-    result, used = {}, set()
+    seen_grams = [grams(t) for t in seen]
+    picked = []                      # 이번에 고른 기사들 (주제 넘어서도 중복 확인)
+    result = {}
     for topic, queries in TOPICS.items():
         bucket = []
         for q in queries:
@@ -88,12 +107,20 @@ def collect(seen):
                 print(f"[경고] '{q}' 가져오기 실패: {e}", file=sys.stderr)
                 continue
             for a in items:
-                key = norm(a["title"])
-                if key in seen or key in used:
-                    continue
                 if a["dt"] and a["dt"] < cutoff:
                     continue
-                used.add(key)
+                if any(w in a["title"] for w in EXCLUDE.get(topic, [])):
+                    continue
+                g = grams(a["title"])
+                if any(similar(g, x) for x in seen_grams):
+                    continue          # 지난번에 이미 보낸 것과 비슷
+                dup = next((p for p in picked if similar(g, p["g"])), None)
+                if dup:
+                    if a["source"] and a["source"] not in dup["others"] and a["source"] != dup["source"]:
+                        dup["others"].append(a["source"])
+                    continue          # 이번에 고른 것과 비슷 → 언론사 이름만 추가
+                a["g"], a["others"] = g, []
+                picked.append(a)
                 bucket.append(a)
         bucket.sort(key=lambda a: a["dt"] or now, reverse=True)
         result[topic] = bucket[:MAX_PER_TOPIC]
@@ -104,7 +131,7 @@ def build_html(result, today):
     total = sum(len(v) for v in result.values())
     parts = [
         '<div style="font-family:Apple SD Gothic Neo,Malgun Gothic,sans-serif;max-width:680px;color:#222">',
-        f'<h2 style="margin:0 0 4px">신도시 뉴스 브리핑</h2>',
+        f'<h2 style="margin:0 0 4px">신도시·에너지 뉴스 브리핑</h2>',
         f'<div style="color:#888;font-size:13px;margin-bottom:18px">{today} · 새 기사 {total}건</div>',
     ]
     for topic, arts in result.items():
@@ -118,10 +145,11 @@ def build_html(result, today):
         parts.append('<ul style="padding-left:18px;margin:0">')
         for a in arts:
             when = a["dt"].strftime("%m/%d %H:%M") if a["dt"] else ""
+            more = f' · 비슷한 기사 {len(a["others"])}건' if a["others"] else ""
             parts.append(
                 f'<li style="margin:6px 0;line-height:1.45">'
                 f'<a href="{escape(a["link"])}" style="color:#1a1a1a;text-decoration:none">{escape(a["title"])}</a>'
-                f' <span style="color:#999;font-size:12px">{escape(a["source"])} {when}</span></li>'
+                f' <span style="color:#999;font-size:12px">{escape(a["source"])} {when}{more}</span></li>'
             )
         parts.append("</ul>")
     web = os.environ.get("WEB_URL")
@@ -159,6 +187,7 @@ def update_archive(result, today):
                 "title": a["title"],
                 "link": a["link"],
                 "source": a["source"],
+                "similar": len(a["others"]),
                 "time": a["dt"].strftime("%Y-%m-%d %H:%M") if a["dt"] else "",
             })
     limit = (datetime.now(KST) - timedelta(days=ARCHIVE_DAYS)).strftime("%Y-%m-%d")
@@ -170,18 +199,17 @@ def update_archive(result, today):
 
 def main():
     today = datetime.now(KST).strftime("%Y-%m-%d")
-    seen = set(load_json(SEEN_FILE, []))
+    seen = load_json(SEEN_FILE, [])
     result = collect(seen)
     html, total = build_html(result, today)
 
-    counts = " · ".join(f"{k} {len(v)}" for k, v in result.items())
-    send_mail(html, f"[신도시 뉴스] {today} ({counts})")
+    send_mail(html, f"[신도시·에너지 뉴스] {today} 새 기사 {total}건")
 
     for arts in result.values():
         for a in arts:
-            seen.add(norm(a["title"]))
+            seen.append(norm(a["title"]))
     with open(SEEN_FILE, "w", encoding="utf-8") as f:
-        json.dump(sorted(seen)[-5000:], f, ensure_ascii=False)
+        json.dump(seen[-3000:], f, ensure_ascii=False)
     update_archive(result, today)
     print(f"완료: 새 기사 {total}건")
 

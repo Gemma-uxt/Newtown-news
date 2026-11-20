@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>신도시 뉴스 워치</title>
+<title>신도시·에너지 뉴스 워치</title>
 <style>
   :root{--bg:#f6f7f9;--card:#fff;--ink:#1d1f23;--sub:#7a7f87;--line:#e6e8ec;--accent:#2a6df4}
   *{box-sizing:border-box}
@@ -31,8 +31,8 @@
 </head>
 <body>
 <header>
-  <h1>신도시 뉴스 워치</h1>
-  <div class="sub">3기 신도시 · 광명시흥 · 의왕군포안산 — 매일 오전 7시 자동 업데이트</div>
+  <h1>신도시·에너지 뉴스 워치</h1>
+  <div class="sub">3기 신도시 · 광명시흥 · 의왕군포안산 · 용량시장 · 히트펌프 · 전극보일러 — 매일 오전 7시 자동 업데이트</div>
 </header>
 <div class="bar" id="bar">
   <input id="q" placeholder="제목·언론사 검색">
@@ -61,7 +61,7 @@ function render(){
   list.innerHTML=Object.keys(byDay).sort().reverse().map(day=>
     `<section class="day"><h2>${day} · ${byDay[day].length}건</h2><div class="card">`+
     byDay[day].sort((a,b)=>(b.time||"").localeCompare(a.time||"")).map(r=>
-      `<div class="row"><span class="tag">${esc(r.topic)}</span><a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.title)}</a><span class="meta">${esc(r.source)} ${esc((r.time||"").slice(5))}</span></div>`
+      `<div class="row"><span class="tag">${esc(r.topic)}</span><a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.title)}</a><span class="meta">${esc(r.source)} ${esc((r.time||"").slice(5))}${r.similar?` · 비슷한 기사 ${r.similar}건`:""}</span></div>`
     ).join("")+`</div></section>`
   ).join("");
 }
