@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>신도시 뉴스 워치</title>
+<style>
+  :root{--bg:#f6f7f9;--card:#fff;--ink:#1d1f23;--sub:#7a7f87;--line:#e6e8ec;--accent:#2a6df4}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  header{max-width:860px;margin:0 auto;padding:32px 20px 8px}
+  h1{margin:0;font-size:24px}
+  .sub{color:var(--sub);font-size:13px;margin-top:4px}
+  .bar{max-width:860px;margin:0 auto;padding:12px 20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;font-size:14px;cursor:pointer}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  input{flex:1;min-width:180px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:14px}
+  main{max-width:860px;margin:0 auto;padding:0 20px 60px}
+  .day{margin-top:22px}
+  .day h2{font-size:15px;color:var(--sub);margin:0 0 8px;font-weight:600}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .row{display:flex;gap:10px;padding:11px 14px;border-top:1px solid var(--line);align-items:baseline}
+  .row:first-child{border-top:none}
+  .tag{flex:none;font-size:11px;padding:2px 8px;border-radius:4px;background:#eef3ff;color:var(--accent);white-space:nowrap}
+  .row a{color:var(--ink);text-decoration:none;flex:1;line-height:1.45}
+  .row a:hover{text-decoration:underline}
+  .meta{flex:none;color:var(--sub);font-size:12px;white-space:nowrap}
+  .empty{color:var(--sub);padding:40px 0;text-align:center}
+  @media(max-width:600px){.row{flex-wrap:wrap}.meta{width:100%;padding-left:0}}
+</style>
+</head>
+<body>
+<header>
+  <h1>신도시 뉴스 워치</h1>
+  <div class="sub">3기 신도시 · 광명시흥 · 의왕군포안산 — 매일 오전 7시 자동 업데이트</div>
+</header>
+<div class="bar" id="bar">
+  <input id="q" placeholder="제목·언론사 검색">
+</div>
+<main id="list"><div class="empty">불러오는 중…</div></main>
+<script>
+let data=[], topic="전체";
+const bar=document.getElementById("bar"), list=document.getElementById("list"), q=document.getElementById("q");
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function chips(){
+  const topics=["전체",...new Set(data.map(d=>d.topic))];
+  bar.querySelectorAll(".chip").forEach(c=>c.remove());
+  topics.forEach(t=>{
+    const b=document.createElement("button");
+    b.className="chip"+(t===topic?" on":"");b.textContent=t;
+    b.onclick=()=>{topic=t;chips();render()};
+    bar.insertBefore(b,q);
+  });
+}
+function render(){
+  const kw=q.value.trim().toLowerCase();
+  const rows=data.filter(d=>(topic==="전체"||d.topic===topic)&&(!kw||(d.title+d.source).toLowerCase().includes(kw)));
+  if(!rows.length){list.innerHTML='<div class="empty">기사가 없습니다</div>';return}
+  const byDay={};
+  rows.forEach(r=>(byDay[r.date]=byDay[r.date]||[]).push(r));
+  list.innerHTML=Object.keys(byDay).sort().reverse().map(day=>
+    `<section class="day"><h2>${day} · ${byDay[day].length}건</h2><div class="card">`+
+    byDay[day].sort((a,b)=>(b.time||"").localeCompare(a.time||"")).map(r=>
+      `<div class="row"><span class="tag">${esc(r.topic)}</span><a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.title)}</a><span class="meta">${esc(r.source)} ${esc((r.time||"").slice(5))}</span></div>`
+    ).join("")+`</div></section>`
+  ).join("");
+}
+q.oninput=render;
+fetch("archive.json?"+Date.now()).then(r=>r.ok?r.json():[]).catch(()=>[]).then(d=>{data=d||[];chips();render()});
+</script>
+</body>
+</html>
