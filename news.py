@@ -9,7 +9,9 @@ import json
 import os
 import smtplib
 import sys
+import time
 import urllib.parse
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
@@ -23,8 +25,8 @@ TOPICS = {
     "3기 신도시": ['"3기 신도시"', '"3기신도시"'],
     "광명시흥": ['광명시흥 신도시', '"광명시흥지구"', '"광명시흥"'],
     "의왕군포안산": ['"의왕군포안산"', '의왕 군포 안산 신도시'],
-    "용량시장": ['"용량시장"', '용량시장 전력'],
-    "히트펌프": ['히트펌프 전력', '히트펌프 열공급', '"히트펌프" 에너지'],
+    "용량시장": ['"용량시장"'],
+    "히트펌프": ['"히트펌프"'],
     "전극보일러": ['"전극보일러"'],
 }
 # 제목에 이 단어가 들어간 기사는 뺍니다 (가전제품 광고성 기사 등)
@@ -47,8 +49,14 @@ def fetch_rss(query):
     q = urllib.parse.quote(f"{query} when:2d")
     url = f"https://news.google.com/rss/search?q={q}&hl=ko&gl=KR&ceid=KR:ko"
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return r.read()
+    for attempt in range(4):
+        time.sleep(3 if attempt == 0 else 20 * attempt)   # 너무 빨리 요청하면 구글이 막아서 쉬어가며 요청
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or attempt == 3:
+                raise
 
 
 def parse_rss(xml_bytes):
